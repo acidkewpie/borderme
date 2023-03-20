@@ -21,7 +21,6 @@ import pprint
 pp = pprint.PrettyPrinter(compact=True, width=200, depth=3)
 
 from collections import namedtuple, OrderedDict
-#Window = namedtuple('window', 'x y width height id fullscreen active monitor')
 Monitor = namedtuple('monitor', 'x y width height')
 
 VERSION = '0.1'
