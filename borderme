@@ -136,6 +136,7 @@ class Border():
   
         window.configure(border_width=10)
 
+
         self.overlay = root.create_window(
                 self.x-opts.BORDER_WIDTH, self.y-opts.BORDER_WIDTH, self.width , self.height, opts.BORDER_WIDTH, depth,
             X.CopyFromParent, visual, colormap=colormap, background_pixel=0xFF00FF00, border_pixel=0,
