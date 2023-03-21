@@ -1,26 +1,25 @@
 #!/bin/python3
+# pylint: disable=C0103
+
 import argparse
 import json
-import subprocess
-import sys
-from math import sqrt
 import logging
+import pprint
+import sys
+from collections import namedtuple
 from enum import IntEnum
+from math import sqrt
 
-log_format = "@%(lineno)d: %(message)s"
-logging.basicConfig(level='DEBUG', format=log_format)
-
-from Xlib import X
 import Xlib.display
+from Xlib import X
 from Xlib.ext import shape
 
 display = Xlib.display.Display()
 root = display.screen().root
 
-import pprint
-pp = pprint.PrettyPrinter(compact=True, width=200, depth=3)
+LOG_FORMAT = "@%(lineno)d: %(message)s"
+logging.basicConfig(level='DEBUG', format=LOG_FORMAT)
 
-from collections import namedtuple, OrderedDict
 Monitor = namedtuple('monitor', 'x y width height')
 
 VERSION = '0.1'
@@ -39,6 +38,7 @@ DEFAULTS = {
 }
 
 class Atoms(IntEnum):
+    '''Various useful Atoms'''
     NET_ACTIVE_WINDOW = display.intern_atom('_NET_ACTIVE_WINDOW')
     NET_WM_STATE_FULLSCREEN = display.intern_atom('_NET_WM_STATE_FULLSCREEN')
     NET_WM_STATE_FOCUSED = display.intern_atom('_NET_WM_STATE_FOCUSED')
@@ -48,7 +48,7 @@ class Atoms(IntEnum):
     NET_CURRENT_DESKTOP = display.intern_atom('_NET_CURRENT_DESKTOP')
 
 class Options:
-
+    '''Options from default, from config file, then from command line'''
     def __init__(self):
 
         self.__dict__.update(DEFAULTS)
@@ -74,23 +74,18 @@ class Options:
 
         # Extract the literal values - move before parse? So cmd line overrides?
         if args.config is not None:
-            with open(args.config, "r") as f:
+            with open(args.config, "r", 'utf8') as f:
                 raw = f.read().replace("-", "_")
                 conf = json.loads(raw)
                 self.__dict__.update({k.upper(): v for k, v in conf.items()})
 
         self.__dict__.update({k.upper(): v for k, v in vars(args).items()})
 
-        self.BORDER_MODE = ["inside", "center", "outside"].index(self.BORDER_MODE) - 1 or 0 
+        self.BORDER_MODE = ["inside", "center", "outside"].index(self.BORDER_MODE) - 1 or 0
 
-        #self.BORDER_RGBA = self.get_rgba(self.BORDER_COLOR)
-        #self.INACTIVE_BORDER_RGBA = self.get_rgba(self.INACTIVE_BORDER_COLOR)
-
-        return
-    
 
 class Monitors():
-    
+  
     def __init__(self):
 
         self.monitors = self.get_monitors()
@@ -99,15 +94,15 @@ class Monitors():
     def get_monitors(self):
 
         resources = display.screen().root.xrandr_get_screen_resources()._data
-        monitors = []
+        ms = []
         for output in resources['outputs']:
             _data = display.xrandr_get_output_info(output, resources['config_timestamp'])._data
             if _data['crtc']:
                 crtc = display.xrandr_get_crtc_info(_data['crtc'], resources['config_timestamp'])._data
 
-                monitors.append(Monitor(crtc["x"], crtc["y"], crtc["width"], crtc["height"]))
+                ms.append(Monitor(crtc["x"], crtc["y"], crtc["width"], crtc["height"]))
 
-        return sorted(monitors, key=lambda m: (m.x, m.y))
+        return sorted(ms, key=lambda m: (m.x, m.y))
 
     def find_at(self, x, y, width, height):
 
@@ -121,9 +116,12 @@ class Monitors():
 class Border():
 
     def __init__(self, window):
-   
+  
         self.window = window
-        self.wid = window.id
+        self.frame = window.query_tree().parent
+        print(self.window.get_geometry())
+        print(self.frame.get_geometry())
+        self.wid = self.window.id
         logging.debug("creating new border for %s", hex(self.wid))
         net_wm_state = self.window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType)
         if net_wm_state is None: # drop if container. Too late?
@@ -133,18 +131,17 @@ class Border():
         self.refresh()
         logging.debug(pp.pformat(self.__dict__))
   
-        window.configure(border_width=10)
-
         self.overlay = root.create_window(
                 self.x-opts.BORDER_WIDTH, self.y-opts.BORDER_WIDTH, self.width , self.height, opts.BORDER_WIDTH, depth,
             X.CopyFromParent, visual, colormap=colormap, background_pixel=0xFF00FF00, border_pixel=0,
-            override_redirect=True, event_mask=0)
-        #self.overlay.set_wm_transient_for(self.window)
+            override_redirect=True, event_mask=X.VisibilityChangeMask)
+        self.overlay.set_wm_transient_for(self.window)
 #            X.ExposureMask | X.KeyPressMask )
 
 #        self.shape_combine = fixed_combine # override broken function
         self.overlay.shape_select_input(0)
         self.overlay.map()
+        #self.overlay.configure(sibling=self.window, stack_mode=X.Below)
         self.draw()
 
 
@@ -206,14 +203,28 @@ class Border():
     def configure_event(self, e):
         logging.debug("got configure event %s", e._data)
         logging.debug("previous %s, %s, %s, %s", self.window_geometry.x, self.window_geometry.y, self.window_geometry.width, self.window_geometry.height)
-        if (e._data["width"], e._data["height"]) == (self.window_geometry.width, self.window_geometry.height):
-            self.x += e._data["x"] - self.window_geometry.x
-            self.y += e._data["y"] - self.window_geometry.y
+        if e._data["width"] == self.window_geometry.width and e._data["height"] == self.window_geometry.height:
+            self.x = e._data["x"] #,self.x + e._data["x"] - self.window_geometry.x
+            self.y = e._data["y"] #- self.window_geometry.y
             self.window_geometry.x = e._data["x"]
             self.window_geometry.y = e._data["y"]
+            self.overlay.configure(x=self.x -  2* opts.BORDER_WIDTH, y=self.y - 2* opts.BORDER_WIDTH)
         else:
             self._calc_geometry(e._data["window"])
-        self.draw()
+            self.draw()
+        return True
+
+    def visibility_event(self, e):
+        self.visibility = e._data.state
+        print("visibility changes")
+        match self.visibility:
+            case X.VisibilityUnobscured:
+                self.overlay.map()
+            case X.VisibilityPartiallyObscured:
+                self.overlay.map() # MORE OF COURSE
+            case X.VisibilityFullyObscured:
+                self.ovelay.unmap()
+
         return True
 
     def create_mask(self, width, height):
@@ -233,7 +244,6 @@ class Border():
             color = opts.BORDER_COLOR if self.active else opts.INACTIVE_BORDER_COLOR
             logging.debug("Drawing %s border for %s", hex(color), hex(self.wid))
             #self.xlib = overlay.draw_border(self.x, self.y, self.width, self.height, color)
-        #overlay.overlay.set_wm_transient_for(self.window)
 
             bw = opts.BORDER_WIDTH
             mask = self.create_mask(self.width, self.height)
@@ -250,6 +260,8 @@ class Border():
 
             gc = self.overlay.create_gc(line_width=bw * 2, foreground=color)
             self.overlay.rectangle(gc, bw, bw, self.width-bw*2, self.height-bw*2)
+
+            display.sync()
 
 
 class Borders():
@@ -295,8 +307,17 @@ class Borders():
             return border.configure_event(e)
         else:
             logging.debug("ignoring event from %s", hex(e.window.id))
+        return True
 
-    def map_event(self, is_map):
+    def visibility_event(self, e):
+        border = self.get_by_wid(e.window.id)
+        if border is not None:
+            return border.visibility_event(e)
+        else:
+            logging.debug("ignoring visibility event from %s", hex(e.window.id))
+        return True
+
+    def map_event(self, e, is_map):
         if is_map:
             logging.debug("ignoring map event from %s", hex(e.window.id))
         else:
@@ -307,91 +328,26 @@ class Borders():
         active_wid = root.get_full_property(Atoms.NET_ACTIVE_WINDOW, X.AnyPropertyType).value[0]
         if active_wid != self.active_wid:
             self.prev_active_wid = self.active_wid
-            self.active_wid = active_wid
             self.borders[self.prev_active_wid].active = False
-            self.borders[self.active_wid].active = True
+            if active_wid:
+                self.active_wid = active_wid
+                self.borders[self.active_wid].active = True
             logging.debug("active = %s, prev = %s", hex(self.active_wid), hex(self.prev_active_wid))
-            for wid in self.wid_stack:
-                if wid in [self.active_wid, self.prev_active_wid]:
-                    self.borders[wid].draw()
+            #for wid in self.wid_stack:
+            #    if wid in [self.active_wid, self.prev_active_wid]:
+            #        self.borders[wid].draw()
             return True
 
     def draw(self):
-        #overlay.clear()
-        #self.prev_active_window = None
         for border in self.borders.values(): 
             if border.visible:
                 border.draw()
+    
+    def destroy(self):
+        for border in self.borders.values(): 
+           border.overlay.destroy()
+    
 
-'''
-class Overlay():
-
-    def __init__(self):
-
-        self.depth = 32
-        for depth_info in display.screen().allowed_depths:
-            if depth_info.depth != self.depth:
-                continue
-            for visual_info in depth_info.visuals:
-                if visual_info.visual_class != X.TrueColor:
-                    continue
-                self.visual = visual_info.visual_id
-
-        self.colormap = root.create_colormap(self.visual, X.AllocNone)
-
-        self.overlay = root.create_window(
-            0, 0, display.screen().width_in_pixels, display.screen().height_in_pixels, 0, self.depth,
-            X.CopyFromParent, self.visual, colormap=self.colormap, background_pixel=0xFF00FF00, border_pixel=0,
-            override_redirect=True, event_mask=0)
-
-#            X.ExposureMask | X.KeyPressMask )
-
-        self.shape_combine = fixed_combine # override broken function
-        self.overlay.shape_select_input(0)
-        self.overlay.map()
-
-        self.init_mask = self.create_mask(1, 1)
-        mask_gc = self.init_mask.create_gc(foreground=1, background=0, line_width=opts.BORDER_WIDTH)
-        #mask.copy_plane(mask_gc, overlay, self.x, self.y, self.width, self.height, 0, 0, 1)
-        self.init_mask.rectangle(mask_gc, 0, 0, 1, 1)
-        #self.overlay.shape_mask(shape.SO.Set, shape.SK.Bounding, 0, 0, mask)
-        self.clear()
-
-    def create_mask(self, width, height):
-        return self.create_pixmap(width, height, 1)
-
-    def create_pixmap(self, width, height, depth = False):
-        return self.overlay.create_pixmap(width, height, depth or self.depth)
-
-    def clear(self):
-        #self.overlay.clear_area(0, 0, 1000, 1000, False)
-        print("clearing")
-        self.overlay.shape_mask(shape.SO.Set, shape.SK.Bounding, 0, 0, self.init_mask)
-
-    def erase_border(self):
-        return
-
-    def draw_border(self, x, y, width, height, color):
-
-        bw = opts.BORDER_WIDTH
-        mask = self.create_mask(width, height)
-        mask_gc = mask.create_gc(foreground=1, background=0, line_width=bw * 2)
-        #mask.copy_plane(mask_gc, overlay, self.x, self.y, self.width, self.height, 0, 0, 1)
-
-        mask.fill_rectangle(mask_gc, 0, 0, width, height)
-        self.overlay.shape_mask(shape.SO.Subtract, shape.SK.Bounding, x, y, mask)
-
-        mask_gc.change(foreground=0)
-
-        mask.fill_rectangle(mask_gc, bw, bw, width-bw * 2, height-bw * 2)
-        self.overlay.shape_mask(shape.SO.Union, shape.SK.Bounding, x, y, mask)
-
-        gc = self.overlay.create_gc(line_width=bw * 2, foreground=color)
-        self.overlay.rectangle(gc, x+bw, y+bw, width-bw*2, height-bw*2)
-        
-        self.overlay.shape_combine(shape.SO.Union, shape.SK.Bounding, shape.SK.Bounding, 100, 100, self.overlay)
-        return mask
-'''
 def handle_event(e):
 
 #    print(e.type)
@@ -402,14 +358,14 @@ def handle_event(e):
                     if borders.update_active_window():
                         return
                 case Atoms.NET_CLIENT_LIST:
-                    # NET_CLIENT_LIST fires a lot when not actually changing, and isn't useful anyway
+                    # NET_CLIENT_LIST isn't useful anyway
                     return
                 case Atoms.NET_CLIENT_LIST_STACKING:
                     if borders.update_wid_stack():
                         return
                 case Atoms.NET_CURRENT_DESKTOP:
                     borders.draw()
-                    
+                  
                     logging.debug("ATOM: %s", display.get_atom_name(e.atom))
                     return
                 case _:
@@ -430,13 +386,16 @@ def handle_event(e):
            # if b is not None:
            #     logging.debug("CONFIGURE: %s", b)
            #     b.draw()
-
+        case X.VisibilityNotify:
+            logging.debug("VISIBILITY: %s", e._data)
+            if borders.visibility_event(e):
+                return
     logging.debug("UNHANDLED: %s", e._data)
 
 
 def main():
 
-    global opts, depth, visual, colormap
+    global pp, opts, depth, visual, colormap
     opts = Options()
     pp = pprint.PrettyPrinter(compact=True, width=100)
 
@@ -451,11 +410,10 @@ def main():
 
     colormap = root.create_colormap(visual, X.AllocNone)
 
-    global monitors, borders, overlay
-    #overlay = Overlay()
+    global monitors, borders
     monitors = Monitors()
     borders = Borders()
-    root.change_attributes(event_mask=X.PropertyChangeMask | X.StructureNotifyMask) # | X.SubstructureNotifyMask)
+    root.change_attributes(event_mask=X.VisibilityChangeMask | X.PropertyChangeMask | X.StructureNotifyMask) # | X.SubstructureNotifyMask)
     #=============================
 
     while True:
@@ -479,5 +437,7 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        exit(0)
-
+        borders.destroy()
+        display.close()
+        logging.debug("BYE!")
+        sys.exit(0)
