@@ -7,87 +7,129 @@ import logging
 import pprint
 import sys
 from collections import namedtuple, defaultdict
-from itertools import groupby
 
 from enum import IntEnum
 from math import sqrt
 
 import Xlib.display
 from Xlib import X
-from Xlib.ext import shape
 
 display = Xlib.display.Display()
 root = display.screen().root
 
 LOG_FORMAT = "@%(lineno)d: %(message)s"
-logging.basicConfig(level='DEBUG', format=LOG_FORMAT)
+logging.basicConfig(level="DEBUG", format=LOG_FORMAT)
 
-Monitor = namedtuple('monitor', 'x y width height')
+Monitor = namedtuple("monitor", "x y width height")
 
-VERSION = '0.1'
-DEFAULTS = {
-    'BORDER_MODE': 'outside',
-    'BORDER_RADIUS': 10,
-    'BORDER_WIDTH': 5,
-    'BORDER_COLOR': 0xffaa0000,
-    'INACTIVE_BORDER_COLOR': 0x44008800,
-    'OFFSET_RIGHT': 0,
-    'OFFSET_LEFT': 0,
-    'OFFSET_TOP': 0,
-    'OFFSET_BOTTOM': 0,
-    'HIDE_ALONE': False,
-    'ACTIVE_ONLY': False,
-}
+VERSION = "0.1"
+
 
 class Atoms(IntEnum):
-    '''Various useful Atoms'''
-    NET_ACTIVE_WINDOW = display.intern_atom('_NET_ACTIVE_WINDOW')
-    NET_WM_STATE_FULLSCREEN = display.intern_atom('_NET_WM_STATE_FULLSCREEN')
-    NET_WM_STATE_FOCUSED = display.intern_atom('_NET_WM_STATE_FOCUSED')
-    NET_WM_STATE = display.intern_atom('_NET_WM_STATE')
-    NET_CLIENT_LIST_STACKING = display.intern_atom('_NET_CLIENT_LIST_STACKING')
-    NET_CLIENT_LIST = display.intern_atom('_NET_CLIENT_LIST')
-    NET_CURRENT_DESKTOP = display.intern_atom('_NET_CURRENT_DESKTOP')
+    """Various useful Atoms"""
+
+    NET_ACTIVE_WINDOW = display.intern_atom("_NET_ACTIVE_WINDOW")
+    NET_WM_STATE_FULLSCREEN = display.intern_atom("_NET_WM_STATE_FULLSCREEN")
+    NET_WM_STATE_FOCUSED = display.intern_atom("_NET_WM_STATE_FOCUSED")
+    NET_WM_STATE = display.intern_atom("_NET_WM_STATE")
+    NET_CLIENT_LIST_STACKING = display.intern_atom("_NET_CLIENT_LIST_STACKING")
+    NET_CLIENT_LIST = display.intern_atom("_NET_CLIENT_LIST")
+    NET_CURRENT_DESKTOP = display.intern_atom("_NET_CURRENT_DESKTOP")
+
 
 class Options:
-    '''Options from default, from config file, then from command line'''
+    """Options from default, from config file, then from command line"""
+
+    BORDER_MODE = "outside"
+    BORDER_RADIUS = 10
+    BORDER_WIDTH = 5
+    BORDER_COLOR = [0xFFAA0000]
+    INACTIVE_BORDER_COLOR = [0xFF008800]
+    OFFSET_RIGHT = 0
+    OFFSET_LEFT = 0
+    OFFSET_TOP = 0
+    OFFSET_BOTTOM = 0
+    HIDE_ALONE = False
+    ACTIVE_ONLY = False
+
     def __init__(self):
 
-        self.__dict__.update(DEFAULTS)
-
         parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
-        parser.add_argument("--config", "-c", type=str, default=None, help="The path to the config file")
-        parser.add_argument("--version", action="version", version='%(prog)s '+VERSION)
-        parser.add_argument("--active-only", action='store_true', help="Only draw a border for the active window")
-        parser.add_argument("--border-radius", type=int, help="The border radius, in pixels")
-        parser.add_argument( "--border-width", type=int, help="The border width in pixels")
-        parser.add_argument("--border-color", nargs='*', 
-            help="Colours of the borders in hex format, per monitor, example: FF0000FF 00FF00")
-        parser.add_argument("--inactive-border-color", nargs='*',
-            help="Colours of the inactive borders in hex format, per monitor, example: FF0000FF 00FF00")
-        parser.add_argument("--border-mode", type=str, choices=["inside", "center", "outside"],
-            help="Where to draw the border relative to frame edge. Values are `outside`, `inside`, `center`")
-        parser.add_argument("--hide-alone", action='store_true', help="Don't display a border if a window is alone on a workspace.")
-        parser.add_argument("--offset-right", type=int, help="How much to increase the windows size to the right.")
-        parser.add_argument("--offset-left", type=int, help="How much to increase the windows size to the left.")
-        parser.add_argument("--offset-top", type=int, help="How much to increase the windows size upwards." )
-        parser.add_argument("--offset-bottom", type=int, help="How much to increase the windows size downwards.")
+        parser.add_argument(
+            "--config", "-c", type=str, default=None, help="The path to the config file"
+        )
+        parser.add_argument(
+            "--version", action="version", version="%(prog)s " + VERSION
+        )
+        parser.add_argument(
+            "--active-only",
+            action="store_true",
+            help="Only draw a border for the active window",
+        )
+        parser.add_argument(
+            "--border-radius", type=int, help="The border radius, in pixels"
+        )
+        parser.add_argument(
+            "--border-width", type=int, help="The border width in pixels"
+        )
+        parser.add_argument(
+            "--border-color",
+            nargs="*",
+            help="Colours of the borders in hex format, per monitor, example: FF0000FF 00FF00",
+        )
+        parser.add_argument(
+            "--inactive-border-color",
+            nargs="*",
+            help="Colours of the inactive borders in hex format, per monitor, example: FF0000FF 00FF00",
+        )
+        parser.add_argument(
+            "--border-mode",
+            type=str,
+            choices=["inside", "center", "outside"],
+            help="Where to draw the border relative to frame edge. Values are `outside`, `inside`, `center`",
+        )
+        parser.add_argument(
+            "--hide-alone",
+            action="store_true",
+            help="Don't display a border if a window is alone on a workspace.",
+        )
+        parser.add_argument(
+            "--offset-right",
+            type=int,
+            help="How much to increase the windows size to the right.",
+        )
+        parser.add_argument(
+            "--offset-left",
+            type=int,
+            help="How much to increase the windows size to the left.",
+        )
+        parser.add_argument(
+            "--offset-top",
+            type=int,
+            help="How much to increase the windows size upwards.",
+        )
+        parser.add_argument(
+            "--offset-bottom",
+            type=int,
+            help="How much to increase the windows size downwards.",
+        )
         args = parser.parse_args()
 
         # Extract the literal values - move before parse? So cmd line overrides?
         if args.config is not None:
-            with open(args.config, "r", 'utf8') as f:
+            with open(args.config, "r", "utf8") as f:
                 raw = f.read().replace("-", "_")
                 conf = json.loads(raw)
                 self.__dict__.update({k.upper(): v for k, v in conf.items()})
 
         self.__dict__.update({k.upper(): v for k, v in vars(args).items()})
 
-        self.BORDER_MODE = ["inside", "center", "outside"].index(self.BORDER_MODE) - 1 or 0
+        self.BORDER_MODE = ["inside", "center", "outside"].index(
+            self.BORDER_MODE
+        ) - 1 or 0
 
 
-class Monitors():
-  
+class Monitors:
     def __init__(self):
 
         self.monitors = self.get_monitors()
@@ -97,10 +139,14 @@ class Monitors():
 
         resources = display.screen().root.xrandr_get_screen_resources()._data
         ms = []
-        for output in resources['outputs']:
-            _data = display.xrandr_get_output_info(output, resources['config_timestamp'])._data
-            if _data['crtc']:
-                crtc = display.xrandr_get_crtc_info(_data['crtc'], resources['config_timestamp'])._data
+        for output in resources["outputs"]:
+            _data = display.xrandr_get_output_info(
+                output, resources["config_timestamp"]
+            )._data
+            if _data["crtc"]:
+                crtc = display.xrandr_get_crtc_info(
+                    _data["crtc"], resources["config_timestamp"]
+                )._data
 
                 ms.append(Monitor(crtc["x"], crtc["y"], crtc["width"], crtc["height"]))
 
@@ -108,95 +154,126 @@ class Monitors():
 
     def find_at(self, x, y, width, height):
 
-        mid_x = x + width/2
-        mid_y = y + height/2
+        mid_x = x + width / 2
+        mid_y = y + height / 2
         for m in self.monitors:
             if m.x <= mid_x <= m.x + m.width and m.y <= mid_y <= m.y + m.height:
                 return self.monitors.index(m)
 
 
-class Border():
-
+class Border:
     def __init__(self, window):
-  
+
         self.window = window
         self.frame = window.query_tree().parent
         self.wid = self.window.id
         logging.debug("creating new border for %s", hex(self.wid))
-        net_wm_state = self.frame.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType)
-        if net_wm_state is None: # drop if container. Too late?
+        net_wm_state = self.frame.get_full_property(
+            Atoms.NET_WM_STATE, X.AnyPropertyType
+        )
+        if net_wm_state is None:  # drop if container. Too late?
             self.window.change_attributes(event_mask=0)
         self._calc_geometry(self.window)
-        self.window.change_attributes(event_mask=X.StructureNotifyMask) #RIGHT PLACE??
+        self.corners = self._calc_corners(corner, self.width, self.height)
+        self.window.change_attributes(event_mask=X.StructureNotifyMask)  # RIGHT PLACE??
         self.refresh()
         logging.debug(pp.pformat(self.__dict__))
-  
-        self.overlay = root.create_window(
-            self.x, self.y, self.width , self.height, 0, depth,
-            X.CopyFromParent, visual, colormap=colormap, background_pixel=0x44008899, border_pixel=0,
-            override_redirect=True, event_mask=X.VisibilityChangeMask)
-        self.overlay.set_wm_class("Well Border me!", "BorderMe")
-#        self.overlay.set_wm_transient_for(self.window)
 
-        print(colormap)
-        print(visual)
-        self.gc = self.overlay.create_gc(line_width=opts.BORDER_RADIUS*2)
-        self.overlay.fill_rectangle(self.gc, 0, 0, 50,50)
+        self.overlay = root.create_window(
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            0,
+            depth,
+            X.InputOutput,
+            visual,
+            colormap=colormap,
+            border_pixel=0,
+            background_pixel=0,
+            border=opts.BORDER_WIDTH,
+            override_redirect=True,
+            event_mask=X.VisibilityChangeMask,
+        )
+        self.overlay.set_wm_class("Well Border me!", "BorderMe")
+        #        self.overlay.set_wm_transient_for(self.window)
+
+        # print(colormap)
+        # print(visual)
+        #        self.overlay.fill_rectangle(self.gc, 0, 0, 50,50)
         self.overlay.shape_select_input(0)
         self.overlay.map()
         self.draw()
 
+    def _calc_corners(self, corner, w, h):
+
+        c = defaultdict(list)
+        for a, xys in corner:
+            print(xys)
+            for x, y in xys:
+                c[a] += [(x, y), (w - x - 1, y), (x, h - y - 1), (w - x - 1, h - y - 1)]
+        print(sorted(c.items()))
+        return sorted(c.items())
 
     def draw(self):
-            
-#        if self.window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType) is not None: # and self.visible:
-            color = opts.BORDER_COLOR if self.active else opts.INACTIVE_BORDER_COLOR
-            arc = self._calc_arc_alpha(opts.BORDER_RADIUS, opts.BORDER_WIDTH, self.width, self.height, color >> 24)
-            logging.debug("Drawing %s border for %s", hex(color), hex(self.wid))
 
-            bw = opts.BORDER_WIDTH
-            t = int(bw/2)
-            br = opts.BORDER_RADIUS
-            mask = self.create_mask(self.width, self.height)
-            mask_gc = mask.create_gc(foreground=1, background=0, line_width=br*2, join_style=X.JoinRound)
+        #        if self.window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType) is not None: # and self.visible:
+        #            color = opts.BORDER_COLOR if self.active else opts.INACTIVE_BORDER_COLOR
+        #            alpha, red, green, blue = (color >> 24)/255, (color >> 16) & 0xff, (color >> 8) & 0xff, color & 0xff
+        #            print(alpha, red, green, blue)
+        #            arc = self._calc_arc_alpha(opts.BORDER_RADIUS, opts.BORDER_WIDTH, self.width, self.height, alpha)
+        #            logging.debug("Drawing %s border for %s", hex(color), hex(self.wid))
 
-#            mask.fill_rectangle(mask_gc, 100, 100, 100, 100)
-#            self.overlay.shape_mask(shape.SO.Subtract, shape.SK.Bounding, 0, 0, mask)
-#            mask_gc.change(foreground=1)
-#            mask.fill_rectangle(mask_gc, bw, bw*2, self.width-bw * 4, self.height-bw * 4)
-#            self.overlay.shape_mask(shape.SO.Set, shape.SK.Bounding, 0, 0, mask)
-#            mask.rectangle(mask_gc, br, br, self.width - br * 2, self.height-br * 2)
-#            mask.rectangle(mask_gc, bw+br, bw+br, self.width-bw * 2, self.height-bw * 2)
-            #self.overlay.poly_point(gc, 0, {xy for a in arc.values() for xy in a})
-            self.overlay.shape_mask(shape.SO.Subtract, shape.SK.Bounding, 0, 0, mask)
-            rgb = color & 0xFFFFFF
-            for a, xys in arc.items():
-                c = (a << 24) + rgb
-                print(hex(c))
-                self.gc.change(c)
-                self.overlay.poly_point(self.gc, 0, xys)
-            self.gc.change(foreground=color, line_width=bw)
-            self.overlay.line(self.gc, br, t, self.width-br, t) 
-            self.overlay.line(self.gc, br, self.height-t, self.width-br, self.height-t) 
-            self.overlay.line(self.gc, t, br, t, self.height-br) 
-            self.overlay.line(self.gc, self.width-t, br, self.width-t, self.height-br) 
-            display.sync()
+        bw = opts.BORDER_WIDTH
+        t = int(bw / 2)
+        br = opts.BORDER_RADIUS
+        mask = self.create_mask(self.width - 100, self.height - 100)
+        mask_gc = mask.create_gc(foreground=1, background=0)
 
+        #            mask.fill_rectangle(mask_gc, 0, 0, 100, 100)
+        #            self.overlay.shape_mask(shape.SO.Set, shape.SK.Bounding, 0, 0, mask)
+        #            mask_gc.change(foreground=1)
+        #            mask.fill_rectangle(mask_gc, bw, bw*2, self.width-bw * 4, self.height-bw * 4)
+        #            self.overlay.shape_mask(shape.SO.Set, shape.SK.Bounding, 0, 0, mask)
+        #            mask.rectangle(mask_gc, br, br, self.width - br * 2, self.height-br * 2)
+        #            mask.rectangle(mask_gc, bw+br, bw+br, self.width-bw * 2, self.height-bw * 2)
+        # self.overlay.poly_point(gc, 0, {xy for a in arc.values() for xy in a})
+        #            self.overlay.shape_mask(shape.SO.Subtract, shape.SK.Bounding, 0, 0, mask)
+        self.gc = self.overlay.create_gc(line_width=bw)
+        for a, xys in self.corners:
+            print(hex(colors[0][0][a]))
+            print(xys)
+            self.gc.change(foreground=colors[0][0][a])
+            self.overlay.poly_point(self.gc, 0, xys)
+        # self.gc.change(ine_width=5)
+        self.overlay.line(self.gc, br, t, self.width - br, t)
+        self.overlay.line(
+            self.gc, br, self.height - t - 1, self.width - br, self.height - t - 1
+        )
+        self.overlay.line(self.gc, t, br, t, self.height - br)
+        self.overlay.line(
+            self.gc, self.width - t - 1, br, self.width - t - 1, self.height - br
+        )
+
+        display.sync()
 
     def refresh(self):
-        net_wm_state = self.window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType)
+        net_wm_state = self.window.get_full_property(
+            Atoms.NET_WM_STATE, X.AnyPropertyType
+        )
 
         self.fullscreen = Atoms.NET_WM_STATE_FULLSCREEN in net_wm_state.value
         self.active = Atoms.NET_WM_STATE_FOCUSED in net_wm_state.value
 
         wm_state = self.window.get_wm_state()
         if wm_state is not None:
-            self.visible = bool(wm_state["state"]) # not "withdrawn"
-        #old monitor shouldn't be needed outside of the instant it changes?
-        #self.monitor = monitors.find_at(self.x, self.y, self.width, self.height) #or old_monitor
+            self.visible = bool(wm_state["state"])  # not "withdrawn"
+        # old monitor shouldn't be needed outside of the instant it changes?
+        # self.monitor = monitors.find_at(self.x, self.y, self.width, self.height) #or old_monitor
 
     def _calc_geometry(self, window):
 
+        # XTranslateCoordinates ?
         self.window_geometry = window.get_geometry()
         (x, y) = (self.window_geometry.x, self.window_geometry.y)
         while True:
@@ -210,44 +287,64 @@ class Border():
 
         b = opts.BORDER_WIDTH * opts.BORDER_MODE
 
-        self.x      = int(x        - b  - opts.OFFSET_TOP)
-        self.y      = int(y        - b  - opts.OFFSET_BOTTOM)
-        self.width  = int(self.window_geometry.width  + 2*b + opts.OFFSET_TOP + opts.OFFSET_RIGHT)
-        self.height = int(self.window_geometry.height + 2*b + opts.OFFSET_BOTTOM  + opts.OFFSET_LEFT)
+        self.x = int(x - b - opts.OFFSET_TOP)
+        self.y = int(y - b - opts.OFFSET_BOTTOM)
+        self.width = int(
+            self.window_geometry.width + 2 * b + opts.OFFSET_TOP + opts.OFFSET_RIGHT
+        )
+        self.height = int(
+            self.window_geometry.height + 2 * b + opts.OFFSET_BOTTOM + opts.OFFSET_LEFT
+        )
 
+    """
     def _calc_arc_alpha(self, r, t, w, h, c):
-         
-        y, a_, w, h, p = 0, 0, w-1, h-1, defaultdict(list) 
-        for z in range(0, int(r/1.414213)+1):
-            a = int(c * (sqrt(r*r - z*z)%1))
+        
+        w, h, p, q, f = w-1, h-1, defaultdict(list), {}, [r]*r
+
+        y, a_, u = t, 0, int((r-t)/1.414213)+1
+        for z in range(0, u):
+            a = c * (1-sqrt((r-t)**2 - z**2)%1)
+            x, y, a_ = r-z-1, y+1 if a < a_ else y, a
+            p[a] += [(x, y-1)]
+            f[x] = y
+
+        y, a_, v = 0, 0, int(r/1.414213)+1
+        for z in range(0, v):
+            a = c * ((sqrt(r**2 - z**2)%1))
             #a = sqrt(r*r - z*z)%1
             x, y, a_ = r-z-1, y+1 if a > a_ else y, a
-            p[a] += [(x, y), (y, x), (w-x, y), (w-y, x), (x, h-y), (y, h-x), (w-x, h-y), (w-y, h-x)]
-            print([(x, y) for y in range(y+1, x)])
-            #p[0xFF] += [(x, y) for y in range(y, x+1)] + [(y, x) for y in range(y, x+1)] 
+            p[a] += [(x, y-1)]
+            p[c] += [(x, y) for y in range(min(x,y), min(f[x], x))] 
             
+        p[c] += [(i, i) for i in range(u-1, v-2)]
 
-        y, a_, s = t, 0, r-t
-        for z in range(1, int(s/1.414213)+1):
-            a = int(100 * (1-sqrt(s*s - z*z)%1))
-            x, y, a_ = r-z-1, y+1 if a < a_ else y, a
-            p[a] += [(x, y), (y, x), (w-x, y), (w-y, x), (x, h-y), (y, h-x), (w-x, h-y), (w-y, h-x)]
-
-#        for while x< yo
-#            p.update({(x, y):0x01 for y in range(max(0, x), yi-1)})
-#            p.update({(x, y):0xFF for y in range(max(yi, x), yo)})
-
-        return p 
+        q=defaultdict(list)
+        for i in p.keys():
+            for (x, y) in p[i]:
+                q[i] += [(x, y), (y, x), (w-x, y), (w-y, x), (x, h-y), (y, h-x), (w-x, h-y), (w-y, h-x)]
+        return q 
+    """
 
     def configure_event(self, e):
         logging.debug("got configure event %s", e._data)
-        logging.debug("previous %s, %s, %s, %s", self.window_geometry.x, self.window_geometry.y, self.window_geometry.width, self.window_geometry.height)
-        if e._data["width"] == self.window_geometry.width and e._data["height"] == self.window_geometry.height:
-            self.x = e._data["x"] #,self.x + e._data["x"] - self.window_geometry.x
-            self.y = e._data["y"] #- self.window_geometry.y
+        logging.debug(
+            "previous %s, %s, %s, %s",
+            self.window_geometry.x,
+            self.window_geometry.y,
+            self.window_geometry.width,
+            self.window_geometry.height,
+        )
+        if (
+            e._data["width"] == self.window_geometry.width
+            and e._data["height"] == self.window_geometry.height
+        ):
+            self.x = e._data["x"]  # ,self.x + e._data["x"] - self.window_geometry.x
+            self.y = e._data["y"]  # - self.window_geometry.y
             self.window_geometry.x = e._data["x"]
             self.window_geometry.y = e._data["y"]
-            self.overlay.configure(x=self.x -  2* opts.BORDER_WIDTH, y=self.y - 2* opts.BORDER_WIDTH)
+            self.overlay.configure(
+                x=self.x - 2 * opts.BORDER_WIDTH, y=self.y - 2 * opts.BORDER_WIDTH
+            )
         else:
             self._calc_geometry(e._data["window"])
             self.draw()
@@ -260,7 +357,7 @@ class Border():
             case X.VisibilityUnobscured:
                 self.overlay.map()
             case X.VisibilityPartiallyObscured:
-                self.overlay.map() # MORE OF COURSE
+                self.overlay.map()  # MORE OF COURSE
             case X.VisibilityFullyObscured:
                 self.ovelay.unmap()
 
@@ -276,51 +373,64 @@ class Border():
     def create_mask(self, width, height):
         return self.create_pixmap(width, height, 1)
 
-    def create_pixmap(self, width, height, depth = False):
+    def create_pixmap(self, width, height, depth=False):
         return self.overlay.create_pixmap(width, height, depth or self.depth)
 
     def erase(self):
-        if self.window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType) is not None: # and self.visible:
+        if (
+            self.window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType)
+            is not None
+        ):  # and self.visible:
             color = opts.BORDER_COLOR if self.active else opts.INACTIVE_BORDER_COLOR
             logging.debug("Drawing %s border for %s", hex(color), hex(self.wid))
-            #overlay.erase_border(self.x, self.y, self.width, self.height, color)
+            # overlay.erase_border(self.x, self.y, self.width, self.height, color)
 
 
-class Borders():
+class Borders:
 
     borders = {}
     prev_active_wid = None
+
     def __init__(self):
-        self.active_wid = root.get_full_property(Atoms.NET_ACTIVE_WINDOW, X.AnyPropertyType).value[0]
+        self.active_wid = root.get_full_property(
+            Atoms.NET_ACTIVE_WINDOW, X.AnyPropertyType
+        ).value[0]
         self.update_wid_stack()
         self.update_active_window()
 
     def get_by_wid(self, wid):
 
-#        for if wid not in self.borders:
+        #        for if wid not in self.borders:
         for border in self.borders.values():
             logging.debug("window = %s", hex(border.window.id))
             logging.debug("frame = %s", hex(border.frame.id))
-            if wid == border.window.id: 
+            if wid == border.window.id:
                 continue
             elif wid == border.frame.id:
                 print("foudn a frame")
                 wid = border.window.id
             else:
-                window = display.create_resource_object('window', wid)
-                if window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType) is None:
+                window = display.create_resource_object("window", wid)
+                if (
+                    window.get_full_property(Atoms.NET_WM_STATE, X.AnyPropertyType)
+                    is None
+                ):
                     logging.debug("masking all events from  %s", hex(wid))
-                    #window.change_attributes(event_mask=0)
+                    # window.change_attributes(event_mask=0)
                     return
                 else:
                     self.borders[wid] = Border(window)
         return self.borders[wid]
 
     def update_wid_stack(self):
-        self.wid_stack = root.get_full_property(Atoms.NET_CLIENT_LIST_STACKING, X.AnyPropertyType).value.tolist()
-        for wid in self.wid_stack:    
+        self.wid_stack = root.get_full_property(
+            Atoms.NET_CLIENT_LIST_STACKING, X.AnyPropertyType
+        ).value.tolist()
+        for wid in self.wid_stack:
             if wid not in self.borders:
-                self.borders[wid] = Border(display.create_resource_object('window', wid))
+                self.borders[wid] = Border(
+                    display.create_resource_object("window", wid)
+                )
         return True
 
     def configure_event(self, e):
@@ -348,32 +458,105 @@ class Borders():
         return True
 
     def update_active_window(self):
-        active_wid = root.get_full_property(Atoms.NET_ACTIVE_WINDOW, X.AnyPropertyType).value[0]
+        active_wid = root.get_full_property(
+            Atoms.NET_ACTIVE_WINDOW, X.AnyPropertyType
+        ).value[0]
         if active_wid != self.active_wid:
             self.prev_active_wid = self.active_wid
             self.borders[self.prev_active_wid].set_active(False)
             if active_wid:
                 self.active_wid = active_wid
                 self.borders[self.active_wid].set_active(True)
-            logging.debug("active = %s, prev = %s", hex(self.active_wid), hex(self.prev_active_wid))
-#            for wid in self.wid_stack:
-#                if wid in [self.active_wid, self.prev_active_wid]:
-#                    self.borders[wid].draw()
+            logging.debug(
+                "active = %s, prev = %s",
+                hex(self.active_wid),
+                hex(self.prev_active_wid),
+            )
+            #            for wid in self.wid_stack:
+            #                if wid in [self.active_wid, self.prev_active_wid]:
+            #                    self.borders[wid].draw()
             return True
 
     def draw(self):
-        for border in self.borders.values(): 
+        for border in self.borders.values():
             if border.visible:
                 border.draw()
-    
+
     def destroy(self):
-        for border in self.borders.values(): 
-           border.overlay.destroy()
-    
+        for border in self.borders.values():
+            border.overlay.destroy()
+
+
+def calc_corner(r, t):
+
+    p, f = defaultdict(list), [r] * r
+
+    y, a_, u = t, 0, int((r - t) / 1.414213) + 1
+    for z in range(0, u):
+        a = round(1 - sqrt((r - t) ** 2 - z**2) % 1, 2)
+        x, y, a_ = r - z - 1, y + 1 if a < a_ else y, a
+        p[a] += [(x, y - 1), (y - 1, x)]
+        f[x] = y
+
+    y, a_, v = 0, 0, int(r / 1.414213) + 1
+    for z in range(0, v):
+        a = round(sqrt(r**2 - z**2) % 1, 2)
+        x, y, a_ = r - z - 1, y + 1 if a > a_ else y, a
+        p[a] += [(x, y - 1), (y - 1, x)]
+        p[1] += [(x, y) for y in range(min(x, y), min(f[x] - 1, x))]
+        p[1] += [(y, x) for y in range(min(x, y), min(f[x] - 1, x))]
+
+    p[1] += [(i, i) for i in range(r - v, r - u)]
+
+    print(sorted(p.items()))
+    return sorted(p.items())
+
+
+def calc_colors(corner, active, inactive):
+
+    colors = [[], []]
+    for argb in inactive:
+        print(argb)
+        a, r, g, b = (
+            (argb >> 24) / 255,
+            (argb >> 16) & 0xFF,
+            (argb >> 8) & 0xFF,
+            argb & 0xFF,
+        )
+        c = {}
+        for i, xys in corner:
+            c[i] = (
+                (int(255 * i) << 24)
+                + (int(r * i) << 16)
+                + (int(g * i) << 8)
+                + int(b * i)
+            )
+        colors[0].append(c)
+
+    for argb in active:
+        print(argb)
+        a, r, g, b = (
+            (argb >> 24) / 255,
+            (argb >> 16) & 0xFF,
+            (argb >> 8) & 0xFF,
+            argb & 0xFF,
+        )
+        c = {}
+        for i, xys in corner:
+            c[i] = (
+                (int(255 * i) << 24)
+                + (int(r * i) << 16)
+                + (int(g * i) << 8)
+                + int(b * i)
+            )
+        colors[1].append(c)
+    print(colors)
+    return colors
+
 
 def handle_event(e):
 
-#    print(e.type)
+    #    print(e.type)
     match e.type:
         case X.PropertyNotify:
             match e.atom:
@@ -388,7 +571,7 @@ def handle_event(e):
                         return
                 case Atoms.NET_CURRENT_DESKTOP:
                     borders.draw()
-                  
+
                     logging.debug("ATOM: %s", display.get_atom_name(e.atom))
                     return
                 case _:
@@ -406,9 +589,9 @@ def handle_event(e):
             if borders.configure_event(e):
                 return
             logging.debug("CONFIGURE: %s", e._data)
-           # if b is not None:
-           #     logging.debug("CONFIGURE: %s", b)
-           #     b.draw()
+        # if b is not None:
+        #     logging.debug("CONFIGURE: %s", b)
+        #     b.draw()
         case X.VisibilityNotify:
             logging.debug("VISIBILITY: %s", e._data)
             if borders.visibility_event(e):
@@ -428,35 +611,55 @@ def match_visual_info(screen, depth, visual_class):
 
 def main():
 
-    global pp, opts, depth, visual, colormap
+    global pp, opts
     opts = Options()
     pp = pprint.PrettyPrinter(compact=True, width=100)
 
+    global corner, colors
+    corner = calc_corner(opts.BORDER_RADIUS, opts.BORDER_WIDTH)
+    colors = calc_colors(corner, opts.BORDER_COLOR, opts.INACTIVE_BORDER_COLOR)
+
+    global depth, visual, colormap
     depth = 32
     visual = match_visual_info(display.screen(), depth, X.TrueColor)
+    print(hex(visual))
     colormap = root.create_colormap(visual, X.AllocNone)
 
     global monitors, borders
     monitors = Monitors()
     borders = Borders()
-    root.change_attributes(event_mask=X.VisibilityChangeMask | X.PropertyChangeMask | X.StructureNotifyMask  | X.SubstructureNotifyMask)
-    #=============================
+    root.change_attributes(
+        event_mask=X.VisibilityChangeMask
+        | X.PropertyChangeMask
+        | X.StructureNotifyMask
+        | X.SubstructureNotifyMask
+    )
+    # =============================
 
     while True:
 
-        #spool through events, THEN wait, so no flooding
+        # spool through events, THEN wait, so no flooding
         while display.pending_events() > 0:
             handle_event(display.next_event())
         handle_event(display.next_event())
 
 
 # monkey patch to fix shape_combine
-def fixed_combine(self, operation, destination_kind, source_kind, x_offset, y_offset, source_window):
+def fixed_combine(
+    self, operation, destination_kind, source_kind, x_offset, y_offset, source_window
+):
     Combine(
-        display=self.display, opcode=self.display.get_extension_major(extname), destination_window=self,
-        operation=operation, destination_kind=destination_kind, source_kind=source_kind,
-        x_offset=x_offset, y_offset=y_offset, source_window=source_window
+        display=self.display,
+        opcode=self.display.get_extension_major(extname),
+        destination_window=self,
+        operation=operation,
+        destination_kind=destination_kind,
+        source_kind=source_kind,
+        x_offset=x_offset,
+        y_offset=y_offset,
+        source_window=source_window,
     )
+
 
 if __name__ == "__main__":
     try:
